@@ -1,0 +1,174 @@
+import requests
+from bs4 import BeautifulSoup
+import bs4
+import re
+import time
+
+import logging
+
+import pdb
+
+url_filter = re.compile(r'twitter.com/(.+?)/status/(\d+)')
+nonjs_url_base = 'https://mobile.twitter.com/%s/status/%s'
+twitter_time_str = "%I:%M %p - %d %b %Y"
+
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36",
+    'authority': 'mobile.twitter.com',
+    'origin': 'https://mobile.twitter.com',
+
+    # 'upgrade-insecure-requests': '1',
+    # 'sec-fetch-size': 'same-origin',
+    # 'sec-fetch-mode': 'navigate',
+    # 'sec-fetch-user': '?1',
+    # 'sec-fetch-dest': 'document',
+    # 'upgrade-insecure-requests': '1'
+}
+
+
+def get_nonjs_url(url: str) -> str:
+    matches = url_filter.findall(url)[0]
+    if len(matches) != 2:
+        raise Exception("URL ILLEAGLE")
+    return nonjs_url_base % (matches[0], matches[1])
+
+
+def get_page(session: requests.sessions.Session, url: str) -> bytes:
+    __headers = headers
+    matches = url_filter.findall(url)[0]
+    __headers.update({
+        'path': '/%s/status/%s' % matches,
+        'referer': 'https://mobile.twitter.com/%s/status/%s' % matches,
+    })
+    # first get page
+    get_resp = session.get(url, headers=__headers)
+    # check non-js jump
+    if get_resp.status_code == 200:
+        if get_resp.text.find("We've detected that JavaScript is disabled in your browser. ") != -1:
+            soup = BeautifulSoup(get_resp.content, features='html.parser')
+            btn = soup.find('button')
+            for i in btn.parents:
+                if i.name == 'form':
+                    nojs_router_url = i.attrs['action']
+                    get_resp = session.post(nojs_router_url,
+                                            headers=__headers,
+                                            data={'path': __headers['path']}
+                                            )
+                    break
+
+    if get_resp.url != url:
+        if get_resp.url == '/'.join(url.split('/')[:-2]):
+            raise Exception("Account has been locked.")
+        raise Exception("Resp url wrong: " + get_resp.url)
+
+    if get_resp.status_code != 200:
+        raise Exception("Connection failed: " + str(get_resp.status_code))
+
+    soup = BeautifulSoup(get_resp.content, features='html.parser')
+    # token = soup.find('input', {'name': 'authenticity_token'})
+    display_media: bs4.element.Tag = soup.find(
+        'input', {'name': 'commit', 'value': 'Display media'})
+    content = b''
+    if display_media is None:
+        content = get_resp.content
+        return content
+    else:
+        for i in display_media.parents:
+            if i.name == 'form':
+                token = i.find('input', {'name': 'authenticity_token'})
+                break
+    if token is None:
+        content = get_resp.content
+        return content
+    # if media is hidden
+    display_media = display_media.attrs['value']
+    token = token.attrs['value']
+
+    post_resp = session.post(
+        url,
+        data={'show_media': 1, 'authenticity_token': token,
+              'commit': display_media},
+        headers=__headers)
+
+    with open('a.html', 'wb') as f:
+        f.write(post_resp.content)
+
+    if post_resp.status_code is not 200:
+        raise Exception("Show media post failed")
+
+    content = post_resp.content
+    return content
+
+
+def parse_page(content: bytes, mode: int = 0) -> dict:
+    """
+    Args:
+        mode:
+            - 0 (do everything for parse)
+            - 1 (do not use strptime)
+    Return Dict format:
+        - account_name
+        - tweet url
+        - content:
+            - data_id
+            - text
+            - time:
+                - original_str
+                - time_struct
+            - media_list:
+                - type: pictures or video
+                - list
+    """
+    soup = BeautifulSoup(content, features='html.parser')
+    tweet_body = soup.find(
+        'div', class_="main-tweet-container").find(class_='main-tweet')
+    trs = tweet_body.findChildren('tr', class_='', recursive=False)
+    account_name = trs[0].find(class_='username').text.strip()
+    data_id = trs[1].find(class_='tweet-text')['data-id']
+    time_str = trs[1].find(class_='metadata').a.text
+    time_obj = None
+    if mode is 0:
+        time_obj = time.strptime(time_str, twitter_time_str)
+    content_text = tweet_body.find(class_='tweet-text').text.strip()
+    url = soup.head.find('link', {'rel': 'canonical'})['href']
+
+    return {
+        'account_name': account_name,
+        'tweet_url': url,
+        'content': {
+            'data_id': data_id,
+            'text': content_text,
+            'time': {
+                'original_str': time_str,
+                'time_object': time_obj
+            },
+            'media_list': {
+                'type': '',
+                'list': []
+            }
+        }
+
+    }
+
+
+if __name__ == "__main__":
+    debug = False
+    if debug:
+        try:
+            from http.client import HTTPConnection
+        except ImportError:
+            from httplib import HTTPConnection
+        HTTPConnection.debuglevel = 1
+
+        logging.basicConfig()  # 初始化 logging，否则不会看到任何 requests 的输出。
+        logging.getLogger().setLevel(logging.DEBUG)
+        requests_log = logging.getLogger("requests.packages.urllib3")
+        requests_log.setLevel(logging.DEBUG)
+        requests_log.propagate = True
+
+    url = 'https://twitter.com/AoiFreesia/status/1239713625092362241?s=09'
+    nonjs_url = get_nonjs_url(url)
+    print("Url: %s\nNonJS Url: %s" % (url, nonjs_url))
+    session = requests.session()
+    get_page(session, nonjs_url)
