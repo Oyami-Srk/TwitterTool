@@ -73,6 +73,7 @@ rux_jsonurl = "https://api.twitter.com/2/rux.json"
 
 no_tweet = "此推文不存在。"
 author_restrict = "此账号的所有者对可以查看其推文的用户进行了限制。"
+not_exists = "对不起，该页面不存在！"
 
 
 class TweetNotExists(Exception):
@@ -207,14 +208,26 @@ def get_tweet_json(env, url):
         input()
 
     for i in range(3):
+        tne = False
         try:
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, "article")))
         except:
-            # check wheather retry button showed up
-            driver.refresh()
-            print(url.strip() + "retry for %d times" % (i))
-            continue
+            # check weheather page is not exists
+            try:
+                mtxt = driver.find_element_by_xpath(
+                    '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div[1]/div/div[2]/div/div/div/h1')
+            except:
+                mtxt = None
+            if mtxt != None and not_exists in mtxt.text:
+                tne = True
+            else:
+                # check wheather retry button showed up
+                driver.refresh()
+                print(url.strip() + "retry for %d times" % (i))
+                continue
+        if tne:
+            raise TweetNotExists()
         break
 
     # loaded

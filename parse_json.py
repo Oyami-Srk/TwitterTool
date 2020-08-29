@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import json
 
 default_json_dir = "./json"
@@ -14,15 +15,25 @@ def get_threads(id, obj: dict, quiet=False) -> list:
     is_thread = False
     tweets = obj['globalObjects']['tweets']
     main_tweet = tweets[str(id)]
-    user_id = main_tweet['user_id']
+    user_id = main_tweet['user_id_str']
+
+    """
     current_user_tweets = [
         tweet_id for tweet_id in tweets
-        if tweets[tweet_id]['user_id'] == user_id
-        and tweets[tweet_id]['in_reply_to_user_id'] == user_id
+        if tweets[tweet_id]['user_id_str'] == user_id
+        and tweets[tweet_id]['in_reply_to_user_id_str'] == user_id
         and 'extended_entities' in tweets[tweet_id].keys()
     ]
+    """
+    current_user_tweets = [str(id)]
+    for tweet_id in tweets:
+        if tweets[tweet_id]['user_id_str'] == user_id and 'extended_entities' in tweets[tweet_id].keys():
+            if 'in_reply_to_user_id_str' in tweets[tweet_id].keys() and tweets[tweet_id]['in_reply_to_user_id_str'] == user_id:
+                current_user_tweets.append(tweet_id)
 
-    if "in_reply_to_status_id" in main_tweet.keys():
+    if "in_reply_to_status_id" in main_tweet.keys() and main_tweet['in_reply_to_status_id'] != None:
+        is_thread = True
+    elif "in_reply_to_status_id_str" in main_tweet.keys() and main_tweet['in_reply_to_status_id_str'] != None:
         is_thread = True
     elif len(current_user_tweets) > 1:
         is_thread = True
@@ -52,7 +63,7 @@ def get_threads(id, obj: dict, quiet=False) -> list:
     for i in rest:
         threads.append(tweets[i])
 
-    threads.sort(key=lambda x: int(x["id"]))
+    threads.sort(key=lambda x: int(x["id_str"]))
     return threads
 
 
@@ -73,7 +84,7 @@ def get_tweet_content_info(tweet_obj: dict) -> dict:
             media_url = max_vs['url']
             medias.append({
                 "id": id,
-                "media_id": m['id'],
+                "media_id": m['id_str'],
                 "url": media_url,
                 "size": {
                     "width": m['original_info']['width'],
@@ -85,7 +96,7 @@ def get_tweet_content_info(tweet_obj: dict) -> dict:
         else:
             medias.append({
                 "id": id,
-                "media_id": m['id'],
+                "media_id": m['id_str'],
                 "url": media_url,
                 "size": {
                     "width": m['original_info']['width'],
@@ -96,7 +107,7 @@ def get_tweet_content_info(tweet_obj: dict) -> dict:
         id += 1
 
     return {
-        "id": tweet_obj['id'],
+        "id": tweet_obj['id_str'],
         "id_str": tweet_obj['id_str'],
         "full_text": tweet_obj['full_text'],
         "medias": medias,
@@ -109,7 +120,7 @@ def get_tweet_user(id, obj: dict) -> dict:
     users = obj["globalObjects"]["users"]
     # return users[id]  # mainly "screen_name", "name", "id"
     return {
-        "id": users[id]["id"],
+        "id": users[id]["id_str"],
         "name": users[id]["name"],
         "screen_name": users[id]["screen_name"],
     }
@@ -121,7 +132,16 @@ def get_tweet(id, json_dir=default_json_dir, quiet=False) -> list:
     result = []
     for t in threads:
         twinfo = get_tweet_content_info(t)
-        twuser = get_tweet_user(t['user_id'], obj)
+        twuser = get_tweet_user(t['user_id_str'], obj)
         twinfo['user'] = twuser
         result.append(twinfo)
     return result
+
+
+if __name__ == "__main__":
+    import sys
+    json_path = sys.argv[1]
+    path = '/'.join(json_path.split('/')[:-1])
+    id = int(json_path.split('/')[-1].split('.')[0])
+    print(json.dumps(
+        get_tweet(id, path), ensure_ascii=False, indent=4))

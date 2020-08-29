@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import argparse
+import logging
 
 parser = argparse.ArgumentParser(
     description="Download tweets media from simplified json file.")
@@ -29,18 +30,26 @@ if __name__ == "__main__":
             author_dir = t['user']['screen_name']
             target_dir = os.path.join(default_download_dir, author_dir)
             for m in t['medias']:
-                fn = os.path.join(target_dir, os.path.basename(m['url']).split('?')[0] )
+                fn = os.path.join(
+                    target_dir, os.path.basename(m['url']).split('?')[0])
                 print(os.path.abspath(fn))
         exit()
 
     print("[INFO] Tweets wait for download: " + str(len(uniq_list)))
 
-    dler = Downloader(base_path=default_download_dir)
     total = 0
     for t in uniq_list:
         for m in t['medias']:
             total += 1
     current = 0
+
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.INFO)
+    logging.getLogger('').addHandler(console)
+    logging.getLogger('').setLevel(logging.INFO)
+
+    dler = Downloader(base_path=default_download_dir,
+                      total=total, logger=logging.getLogger(''))
 
     for t in uniq_list:
         # Check file exists

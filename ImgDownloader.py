@@ -8,6 +8,7 @@ import logging
 import urllib.request
 #from multiprocessing import Pool
 from multiprocessing.dummy import Pool
+from multiprocessing import Lock
 
 
 class Downloader:
@@ -16,7 +17,8 @@ class Downloader:
     def __init__(self,
                  base_url='{}',
                  base_path='',
-                 logger=logging.getLogger('log')):
+                 logger=logging.getLogger('log'),
+                 total=0):
         """ Generate downloader function via params """
         self.logger = logger
         self.logger.info("Downloader Starting...")
@@ -24,6 +26,9 @@ class Downloader:
         self.dl_list = []
         self.base_url = str(base_url)
         self.base_path = str(base_path)
+        self.total = total
+        self.finished = 0
+        self.lock = Lock()
 
     def get_status(self, clear=False):
         downloaded = []
@@ -86,7 +91,14 @@ class Downloader:
             self.logger.error("Error downloading image: " + url + ' ; err: ' +
                               str(e))
             return False
-        self.logger.info('Downloaded: ' + url)
+        t = 0
+        f = 0
+        with self.lock:
+            t = self.total
+            self.finished += 1
+            f = self.finished
+        # self.logger.info('Downloaded: ' + url + ' ' +)
+        self.logger.info(f"[{f}/{t}] Downloaded: {url}")
         return True
 
     def close(self):
