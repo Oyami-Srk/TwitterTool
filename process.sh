@@ -2,6 +2,7 @@
 
 cookie_file="cookie.json"
 workdir="working_dir"
+download_dir="$workdir/download"
 
 # preprocess todo.txt
 function preprocess() {
@@ -123,17 +124,83 @@ function cock() {
     fi
     local jnf=$jn.json
     python3 ./cock_list.py -o $jnf $1
+    cocked_file=$jnf
 }
 
 function pack() {
-    tar -jcf $1.tar.bz2 $1
+    tar -jcf $1.tar.bz2 --strip-components 1 $1
+    local file_sz_byte=`wc -c < $1.tar.bz2 | tr -d ' '`
+    local file_sz_kb=`echo $file_sz_byte / 1024 | bc`
+    local file_sz_mb=`echo $file_sz_kb / 1024 | bc`
+    echo -n "We got tar.bz2 file about $file_sz_kb KB ($file_sz_mb MB). Would you like to delete the original directory? [Y/N] "
+    read -q
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo ''
+        rm -rf $json_dir
+    fi
 }
+
+function unpack() {
+    tar -jxf $1 -C $workdir
+}
+
+function download() {
+    if [ ! -f $1 ]; then
+        echo Cocked json file \"$1\" does not exists.
+        exit 5
+    fi
+    today=`date "+%Y%m%d"`
+    local dln=log/download-$today
+    if [ -f $dln.log ]; then
+        local index=1
+        while :
+        do
+            if [ ! -f $dln-$index.log ]; then
+                $dln="$dln-$index"
+                break
+            fi
+            (( index++ ))
+        done
+    fi
+    local dlf=$dln.log
+    python3 ./download.py -o $download_dir $1 | tee $dlf
+}
+
+function download_list() {
+    if [ ! -f $1 ]; then
+        echo Cocked json file \"$1\" does not exists.
+        exit 5
+    fi
+    list_file=$workdir/`basename -s '.json' $1`.txt
+    python3 ./download.py -o $download_dir $1 -D > $list_file
+}
+
 
 function all() {
     preprocess $1
     get $tmp_file
     cock $json_dir
+    mv $1 $json_dir/
     pack $json_dir
+    
+    echo -n "Would you like to start to download all medias files? [Y/N] "
+    read -q
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo ''
+        download $cocked_file
+        echo -n "Would you like to save downloaded file list to a file? [Y/N] "
+        read -q
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo ''
+            download_list $cocked_file
+            echo "Downloaded file list: $list_file"
+        fi
+    fi
+    echo -n "Would you like to remove unused log file? [Y/N] "
+    read -q
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        rm *.log
+    fi
 }
 
 "$@"

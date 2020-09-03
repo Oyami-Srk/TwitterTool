@@ -224,7 +224,7 @@ def get_tweet_json(env, url):
             else:
                 # check wheather retry button showed up
                 driver.refresh()
-                print(url.strip() + "retry for %d times" % (i))
+                print(url.strip() + " retry for %d times" % (i))
                 continue
         if tne:
             raise TweetNotExists()
