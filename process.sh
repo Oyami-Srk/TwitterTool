@@ -43,7 +43,7 @@ function get() {
         while :
         do
             if [ ! -f $logn-$index.log ]; then
-                $logn="$logn-$index"
+                logn="$logn-$index"
                 break
             fi
             (( index++ ))
@@ -70,11 +70,11 @@ function get() {
     ret=$?
 
     failed=`cat $logf | grep Failed | awk '{ print $2 }'`
-    failed_num=`echo $failed | wc -l | tr -d ' '`
+    failed_num=`cat $logf | grep -c Failed`
     restrict=`cat $logf | grep Restrict | awk '{ print $2 }'`
-    restrict_num=`echo $restrict | wc -l | tr -d ' '`
+    restrict_num=`cat $logf | grep -c Restrict`
     notexists=`cat $logf | grep NotExists | awk '{ print $2 }'`
-    notexists_num=`echo $notexists | wc -l | tr -d ' '`
+    notexists_num=`cat $logf | grep -c NotExists`
 
     if [ $failed_num = 0 ]; then
         echo "Awesome, No failed entries for first turn!"
@@ -82,11 +82,11 @@ function get() {
         echo NotExists entries: $notexists_num
         return 0
     else
-        echo -n "Waiting for retry...5"; sleep 0.5; echo -n .; sleep 0.5; echo -n 4; sleep 0.5; echo -n .; sleep 0.5; echo -n 3; sleep 0.5; echo -n .; sleep 0.5; echo -n 2; sleep 0.5; echo -n .; sleep 0.5; echo -n 1; sleep 0.5; echo -n .; sleep 0.5; echo "0\!"
         local retries=1
         local cfailed=$failed
         while [ $retries -le 3 ]
         do
+            echo -n "Waiting for retry...5"; sleep 0.5; echo -n .; sleep 0.5; echo -n 4; sleep 0.5; echo -n .; sleep 0.5; echo -n 3; sleep 0.5; echo -n .; sleep 0.5; echo -n 2; sleep 0.5; echo -n .; sleep 0.5; echo -n 1; sleep 0.5; echo -n .; sleep 0.5; echo "0!"
             echo "Retrying failed entries for $retries times."
             local tmpi=`mktemp`
             echo $cfailed > $tmpi
@@ -94,7 +94,7 @@ function get() {
             python3 ./get_tweets.py -i $tmpi -o $json_dir -C $cookie_file --log $ret_logf --headless
             rm $tmpi
             cfailed=`cat $ret_logf | grep Failed | awk '{ print $2 }'`
-            local cfn=`echo $cfailed | wc -l | tr -d ' '`
+            local cfn=`cat $ret_logf | grep -c Failed`
             if [ $cfn = 0 ]; then
                 echo Failed entries cleaned.
                 break
@@ -116,7 +116,7 @@ function cock() {
         while :
         do
             if [ ! -f $jn-$index.json ]; then
-                $jn="$jn-$index"
+                jn="$jn-$index"
                 break
             fi
             (( index++ ))
@@ -156,7 +156,7 @@ function download() {
         while :
         do
             if [ ! -f $dln-$index.log ]; then
-                $dln="$dln-$index"
+                dln="$dln-$index"
                 break
             fi
             (( index++ ))
@@ -183,12 +183,12 @@ function all() {
     mv $1 $json_dir/
     pack $json_dir
     
-    echo -n "Would you like to start to download all medias files? [Y/N] "
+    echo -n "\nWould you like to start to download all medias files? [Y/N] "
     read -q
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo ''
         download $cocked_file
-        echo -n "Would you like to save downloaded file list to a file? [Y/N] "
+        echo -n "\nWould you like to save downloaded file list to a file? [Y/N] "
         read -q
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             echo ''
@@ -196,7 +196,7 @@ function all() {
             echo "Downloaded file list: $list_file"
         fi
     fi
-    echo -n "Would you like to remove unused log file? [Y/N] "
+    echo -n "\nWould you like to remove unused log file? [Y/N] "
     read -q
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         rm *.log
